@@ -15,7 +15,8 @@ mongoose.connect(config.db,{
     }
 });
 
-//require('./user');
+require('./user');
 require('./message');
 
 exports.Message=mongoose.model('Message');
+exports.User=mongoose.model('User');
