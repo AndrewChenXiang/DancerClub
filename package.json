@@ -17,6 +17,7 @@
   },
   "homepage": "https://github.com/AndrewChenXiang/DancerClub#readme",
   "dependencies": {
+    "async": "^2.6.0",
     "bcrypt": "^1.0.3",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.18.2",
@@ -37,6 +38,8 @@
     "moment": "^2.21.0",
     "mongoose": "^5.0.9",
     "node-uuid": "^1.4.8",
+    "nodemailer": "^4.6.3",
+    "nodemailer-smtp-transport": "^2.7.4",
     "utility": "^1.13.1",
     "validator": "^9.4.1"
   },

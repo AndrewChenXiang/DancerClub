@@ -9,6 +9,9 @@ var router=express.Router();
 router.get('/',site.index);
 
 router.get('/signup',sign.showSignup);
-router.post('/signup',sign.signup);
+router.get('/signin',sign.showLogin);
+router.post('/signin',sign.login);
+router.post('/signout',sign.signout);
 
+router.get('/active_account',sign.activeAccount);
 module.exports=router;

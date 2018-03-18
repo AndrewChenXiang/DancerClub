@@ -1,6 +1,7 @@
 var User=require('../models').User;
 var uuid=require('node-uuid');
 var utility=require('utility');
+var validator=require('validator');
 exports.getUserById=function (id,callback) {
     if(!id)
        return callback();
@@ -22,4 +23,11 @@ exports.newAndSave=function (name,loginname,pass,email,avatar_url,active,callbac
     user.active=active||true;
     user.accessToken=uuid.v4();
     user.save(callback);
+};
+exports.getUserByLoginName=function (name,callback) {
+    User.findOne({'loginname':new RegExp('^'+name+'$',"i")},callback);
+}
+
+exports.getUserByMail=function (email,callback) {
+    User.findOne({email:email},callback);
 }

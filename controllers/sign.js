@@ -2,8 +2,18 @@ var validator=require('validator');
 var eventproxy=require('eventproxy');
 var tool=require('../common/tools');
 var User=require('../proxy').User;
+var mail=require('../common/mail');
+var utility=require('utility');
+var config=require('../config');
+var authMiddleWare=require('../middlewares/auth');
+
 exports.showSignup=function (req,res) {
+
     res.render('sign/signup');
+}
+exports.showLogin=function (req,res) {
+    req.session._loginReferer=req.headers.referer;
+    res.render('sign/signin');
 }
 exports.signup=function (req,res,next) {
     var loginname=validator.trim(req.body.loginname);
@@ -52,9 +62,12 @@ exports.signup=function (req,res,next) {
                 if(err){
                     return next(err);
                 }
+              mail.sendActiveMail(email,utility.md5(email+passhash+config.session_secret),loginname);
+                res.render('sign/signup', {
+                    success: '欢迎加入 ' + config.name + '！我们已给您的注册邮箱发送了一封邮件，请点击里面的链接来激活您的帐号。'
+                });
 
-
-            })
+            });
             
         }))
 
@@ -68,4 +81,99 @@ exports.signup=function (req,res,next) {
 
 
 
+};
+var notJump = [
+    '/active_account', //active page
+    '/reset_pass',     //reset password page, avoid to reset twice
+    '/signup',         //regist page
+    '/search_pass'    //serch pass page
+];
+exports.signout=function (req,res,next) {
+    req.session.destroy();
+    res.clearCookie(config.auth_cookie_name,{path:'/'});
+    res.redirect('/');
+}
+exports.login=function (req,res,next) {
+    var loginname=validator.trim(req.body.name).toLowerCase();
+    var pass=validator.trim(req.body.pass);
+    var ep=new eventproxy();
+    ep.fail(next);
+    ep.on('login_error',function (login_error) {
+        res.status(403);
+        res.render('sign/signin',{error:'用户名或者密码错误'})
+    })
+    if(!loginname || !pass)
+    {
+        res.status(422);
+        return res.render('sign/signin',{error:'x信息不完整'});
+    }
+    var getUser;
+    if(loginname.indexOf('@')!==-1)
+    {
+        getUser=User.getUserByMail;
+    }
+    else{
+        getUser=User.getUserByLoginName;
+    }
+
+    getUser(loginname,function (err,user) {
+        if(err){
+            return next(err);
+        }
+        if(!user)
+        {
+            return ep.emit('login_error');
+        }
+        var passhash=user.pass;
+        tool.bcompare(pass,passhash,ep.done(function (bool) {
+            if(!bool){
+                return ep.emit('login_error');
+            }
+            if (!user.active) {
+                // 重新发送激活邮件
+                mail.sendActiveMail(user.email, utility.md5(user.email + passhash + config.session_secret), user.loginname);
+                res.status(403);
+                return res.render('sign/signin', { error: '此帐号还没有被激活，激活链接已发送到 ' + user.email + ' 邮箱，请查收。' });
+            }
+
+            authMiddleWare.gen_session(user,res);
+            var refer = req.session._loginReferer || '/';
+            for (var i = 0, len = notJump.length; i !== len; ++i) {
+                if (refer.indexOf(notJump[i]) >= 0) {
+                    refer = '/';
+                    break;
+                }
+            }
+            res.redirect(refer);
+        }));
+    })
+
+}
+exports.activeAccount=function (req,res,next) {
+    var key=validator.trim(req.query.key);
+    var name=validator.trim(req.query.name);
+    User.getUserByLoginName(name,function (err,user) {
+        if(err)
+        {
+            next(err);
+        }
+        if(!user)
+        {
+            next(new Error('[ACTIVE_ACCOUNT] no such user:'+name));
+        }
+        var passhash=user.pass;
+        if(!user || utility.md5(user.email+passhash+config.session_secret)!==key)
+        {
+            return res.render('notify/notify',{error:'信息有误，帐号无法被激活。'})
+        }
+        user.active=true;
+        user.save(function (err) {
+            if(err)
+            {
+                return next(err);
+            }
+            res.render('notify/notify',{success:'帐号已被激活，请登录'});
+            next();
+        })
+    })
 }
