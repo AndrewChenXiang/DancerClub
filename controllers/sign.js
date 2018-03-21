@@ -6,6 +6,8 @@ var mail=require('../common/mail');
 var utility=require('utility');
 var config=require('../config');
 var authMiddleWare=require('../middlewares/auth');
+var uuid=require('node-uuid');
+
 
 exports.showSignup=function (req,res) {
 
@@ -92,6 +94,88 @@ exports.signout=function (req,res,next) {
     req.session.destroy();
     res.clearCookie(config.auth_cookie_name,{path:'/'});
     res.redirect('/');
+};
+exports.showSearchPass = function (req, res) {
+    res.render('sign/search_pass');
+};
+
+exports.updateSearchPass=function (req,res,next) {
+    var email=validator.trim(req.body.email).toLowerCase();
+    if(!validator.isEmail(email))
+    {
+        return res.render('sign/search_pass',{error: '邮箱不合法', email: email});
+    }
+    var retrieveKey=uuid.v4();
+    var retrieveTime=new Date().getTime();
+    User.getUserByMail(email,function (err,user) {
+        if(err)
+        {
+            next(err);
+        }
+        if(!user)
+        {
+            res.render('sign/search_pass',{error:'没有这个电子邮箱。',email:email});
+        }
+        user.retrieve_key=retrieveKey;
+        user.retrieve_time=retrieveTime;
+        user.save(function (err) {
+            if(err){
+                return next(err);
+            }
+            mail.sendResetPassMail(email,retrieveKey,user.loginname);
+            res.render('notify/notify',{success:'我们已给您填写的电子邮箱发送了一封邮件，请在24小时内点击里面的链接来重置密码。'})
+        })
+    })
+}
+exports.updatePass=function (req,res,next) {
+    var psw=validator.trim(req.body.psw)||'';
+    var repsw=validator.trim(req.body.repsw) || '';
+    var key=validator.trim(req.body.key)|| '';
+    var name=validator.trim(req.body.name) ||'';
+    var ep=new eventproxy();
+    ep.fail(next);
+    if(psw !== repsw)
+    {
+        return res.render('sign/reset',{name:name,key:key,error:'两次密码输入不一致。'})
+    }
+    User.getUserByNameAndKey(name,key,ep.done(function (user) {
+        if(!user)
+        {
+            res.render('notify/notify',{error:'错误的激活链接'});
+        }
+        tool.bhash(psw,ep.done(function (passhash) {
+            user.pass=passhash;
+            user.retrieve_key=null;
+            user.retrieve_time=null;
+            user.active =true;
+            user.save(function (err) {
+                if(err)
+                {
+                    return next(err);
+                }
+                return res.render('notify/notify',{success: '你的密码已重置。'});
+            })
+        }))
+    }))
+}
+exports.resetPass=function (req,res,next) {
+    var key=validator.trim(req.query.key || '');
+    var name=validator.trim(req.query.name || '');
+    User.getUserByNameAndKey(name,key,function (err,user) {
+        if(!user)
+        {
+            res.status(403);
+            return res.render('notify/notify',{error:'信息有误，密码无法重置。'})
+        }
+        var now=new Date().getTime();
+        var oneDay=1000*60*60*24;
+        if(!user.retrieve_time||now-user.retrieve_time>oneDay)
+        {
+            res.status(403);
+            return res.render('notify/notify', {error: '该链接已过期，请重新申请。'});
+        }
+        return res.render('sign/reset',{name:name,key:key});
+    })
 }
 exports.login=function (req,res,next) {
     var loginname=validator.trim(req.body.name).toLowerCase();

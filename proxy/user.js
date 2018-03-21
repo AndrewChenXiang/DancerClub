@@ -27,7 +27,9 @@ exports.newAndSave=function (name,loginname,pass,email,avatar_url,active,callbac
 exports.getUserByLoginName=function (name,callback) {
     User.findOne({'loginname':new RegExp('^'+name+'$',"i")},callback);
 }
-
+exports.getUserByNameAndKey=function (loginname,key,callback) {
+    User.findOne({loginname:loginname,retrieve_key:key},callback);
+}
 exports.getUserByMail=function (email,callback) {
     User.findOne({email:email},callback);
 }
